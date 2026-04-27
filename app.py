@@ -61,7 +61,7 @@ ICONES = {"Tanque": "🚜", "Míssil": "🚀", "Aeronave": "✈️", "Nenhum": "
 # --- MENU ---
 aba = st.sidebar.radio("MENU", ["📊 Dashboard", "⚔️ Escalação Rápida", "👤 Membros", "📜 Histórico", "📢 Anúncio"])
 
-# --- ABA: DASHBOARD ---
+# --- DASHBOARD ---
 if aba == "📊 Dashboard":
     st.title("🛡️ Painel de Comando")
     c1, c2, c3, c4 = st.columns(4)
@@ -80,7 +80,7 @@ if aba == "📊 Dashboard":
         st.subheader("📈 Distribuição")
         st.bar_chart(df['Tropa'].value_counts())
 
-# --- ABA: ESCALAÇÃO RÁPIDA ---
+# --- ESCALAÇÃO RÁPIDA ---
 elif aba == "⚔️ Escalação Rápida":
     st.header("Centro de Escalação")
     c1, c2, c3 = st.columns([2, 1, 1])
@@ -136,7 +136,7 @@ elif aba == "👤 Membros":
                 df.to_csv(ARQUIVO_MEMBROS, index=False); st.rerun()
     st.dataframe(df.sort_values(by="Poder (M)", ascending=False), use_container_width=True)
 
-# --- ABA: ANÚNCIO (RESTAURADA LISTA E TABELA) ---
+# --- ABA: ANÚNCIO (ATUALIZADA COM TIMES SEPARADOS) ---
 elif aba == "📢 Anúncio":
     st.header("📢 Central de Anúncios")
     data_rel = st.text_input("Data da Guerra:", DATA_SUGERIDA)
@@ -166,11 +166,28 @@ elif aba == "📢 Anúncio":
         st.code(m3.replace("{lista}", lista_viva))
 
     st.divider()
-    st.subheader("📝 Conferência de Escalação (O que será arquivado)")
-    quem_vai = df[df['Time'] != "Nenhum"].sort_values(by=["Time", "Status", "Poder (M)"], ascending=[True, False, False])
-    if not quem_vai.empty:
-        st.dataframe(quem_vai[['Jogador', 'Poder (M)', 'Time', 'Status', 'Tropa']], use_container_width=True)
+    st.subheader("📝 Conferência de Escalação (Times Separados)")
     
+    # Visualização lado a lado igual ao histórico
+    col_conf_a, col_conf_b = st.columns(2)
+    
+    with col_conf_a:
+        st.markdown("### 📍 TIME A (18h)")
+        conf_a = df[df['Time'] == "Time A (18h)"].sort_values(by=["Status", "Poder (M)"], ascending=[False, False])
+        if not conf_a.empty:
+            st.table(conf_a[['Jogador', 'Poder (M)', 'Status']])
+        else:
+            st.write("Ninguém escalado.")
+
+    with col_conf_b:
+        st.markdown("### 📍 TIME B (09h)")
+        conf_b = df[df['Time'] == "Time B (09h)"].sort_values(by=["Status", "Poder (M)"], ascending=[False, False])
+        if not conf_b.empty:
+            st.table(conf_b[['Jogador', 'Poder (M)', 'Status']])
+        else:
+            st.write("Ninguém escalado.")
+    
+    st.divider()
     c_b1, c_b2 = st.columns(2)
     with c_b1:
         if st.button("💾 SALVAR MODELOS DE TEXTO", key="save_models_btn"):
@@ -178,54 +195,35 @@ elif aba == "📢 Anúncio":
             st.success("Modelos salvos!")
     with c_b2:
         if st.button("🗄️ ARQUIVAR HISTÓRICO", key="save_history"):
+            quem_vai = df[df['Time'] != "Nenhum"].copy()
             if not quem_vai.empty:
-                save_df = quem_vai.copy(); save_df['Data'] = data_rel
+                quem_vai['Data'] = data_rel
                 if os.path.exists(ARQUIVO_HISTORICO):
                     h_at = pd.read_csv(ARQUIVO_HISTORICO)
                     h_at = h_at[h_at['Data'] != data_rel]
-                    h_final = pd.concat([h_at, save_df], ignore_index=True)
-                else: h_final = save_df
+                    h_final = pd.concat([h_at, quem_vai], ignore_index=True)
+                else: h_final = quem_vai
                 h_final.to_csv(ARQUIVO_HISTORICO, index=False); st.success(f"Arquivado: {data_rel}")
 
-# --- ABA: HISTÓRICO (AGORA COM TIMES SEPARADOS) ---
+# --- ABA: HISTÓRICO ---
 elif aba == "📜 Histórico":
-    st.header("📜 Histórico de Guerras")
+    st.header("📜 Histórico")
     if os.path.exists(ARQUIVO_HISTORICO):
         h_df = pd.read_csv(ARQUIVO_HISTORICO)
         if not h_df.empty:
-            # Seleção da Data
             datas = sorted(h_df['Data'].unique(), reverse=True)
-            d_sel = st.selectbox("Selecione a Data da Guerra:", datas)
-            
-            # Filtro da data selecionada
+            d_sel = st.selectbox("Data:", datas)
             filtro = h_df[h_df['Data'] == d_sel]
             
-            # Divisão em duas colunas para Time A e Time B
-            col_a, col_b = st.columns(2)
-            
-            with col_a:
+            cola, colb = st.columns(2)
+            with cola:
                 st.subheader("📍 TIME A (18h)")
-                time_a = filtro[filtro['Time'] == "Time A (18h)"].sort_values(by=["Status", "Poder (M)"], ascending=[False, False])
-                if not time_a.empty:
-                    st.table(time_a[['Jogador', 'Poder (M)', 'Status']])
-                    st.info(f"Poder Total A: {time_a['Poder (M)'].sum():.1f}M")
-                else:
-                    st.write("Ninguém escalado no Time A nesta data.")
-
-            with col_b:
+                ta = filtro[filtro['Time'] == "Time A (18h)"].sort_values(by=["Status", "Poder (M)"], ascending=[False, False])
+                st.table(ta[['Jogador', 'Poder (M)', 'Status']])
+            with colb:
                 st.subheader("📍 TIME B (09h)")
-                time_b = filtro[filtro['Time'] == "Time B (09h)"].sort_values(by=["Status", "Poder (M)"], ascending=[False, False])
-                if not time_b.empty:
-                    st.table(time_b[['Jogador', 'Poder (M)', 'Status']])
-                    st.info(f"Poder Total B: {time_b['Poder (M)'].sum():.1f}M")
-                else:
-                    st.write("Ninguém escalado no Time B nesta data.")
+                tb = filtro[filtro['Time'] == "Time B (09h)"].sort_values(by=["Status", "Poder (M)"], ascending=[False, False])
+                st.table(tb[['Jogador', 'Poder (M)', 'Status']])
             
-            st.divider()
-            if st.button("🗑️ APAGAR ESTA DATA DO HISTÓRICO"):
-                h_df[h_df['Data'] != d_sel].to_csv(ARQUIVO_HISTORICO, index=False)
-                st.rerun()
-        else:
-            st.info("O arquivo de histórico está vazio.")
-    else:
-        st.error("Arquivo de histórico não encontrado.")
+            if st.button("🗑️ APAGAR DATA"):
+                h_df[h_df['Data'] != d_sel].to_csv(ARQUIVO_HISTORICO, index=False); st.rerun()
