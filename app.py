@@ -46,28 +46,29 @@ def carregar_dados():
         conn = st.connection("gsheets", type=GSheetsConnection)
         df_online = conn.read(spreadsheet=URL_PLANILHA, ttl=0)
         
-        # Ajuste de colunas
-        df_online = df_online.rename(columns={"Poder": "Poder (M)"})
+        # Se a planilha vier vazia ou der erro, criamos um exemplo para o app não travar
+        if df_online is None or df_online.empty:
+            raise ValueError("Planilha vazia")
+
+        # Garante que os nomes das colunas batem com o que o código espera
+        if "Poder" in df_online.columns:
+            df_online = df_online.rename(columns={"Poder": "Poder (M)"})
         
-        # Garante que as colunas essenciais existam
-        colunas_necessarias = ["Jogador", "Poder (M)", "Time", "Status", "Tropa"]
-        for col in colunas_necessarias:
-            if col not in df_online.columns:
-                df_online[col] = "Nenhum" if col != "Poder (M)" else 0.0
+        # Preenche campos vazios para evitar erros visuais
+        for col in ["Time", "Status", "Tropa"]:
+            if col not in df_online.columns: df_online[col] = "Nenhum"
         
-        # Limpeza de dados nulos
         df_online["Time"] = df_online["Time"].fillna("Nenhum")
         df_online["Status"] = df_online["Status"].fillna("Nenhum")
-        df_online["Jogador"] = df_online["Jogador"].fillna("Desconhecido")
         
-        # Salva uma cópia local (Backup) para emergências
+        # Guarda um backup local automático sempre que a internet funcionar
         df_online.to_csv(ARQUIVO_MEMBROS, index=False)
-        st.toast("✅ Sincronizado com Google Sheets!", icon="📡")
         return df_online
     except Exception as e:
-        st.warning("⚠️ Usando Backup Local (Conexão Online falhou).")
+        st.error(f"Conexão falhou: {e}")
         if os.path.exists(ARQUIVO_MEMBROS):
             return pd.read_csv(ARQUIVO_MEMBROS)
+        # Se tudo falhar, retorna estrutura vazia para o dashboard não quebrar
         return pd.DataFrame(columns=["Jogador", "Poder (M)", "Time", "Status", "Tropa"])
 
 def carregar_modelos():
