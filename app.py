@@ -80,7 +80,7 @@ if aba == "📊 Dashboard":
         st.subheader("📈 Distribuição")
         st.bar_chart(df['Tropa'].value_counts())
 
-# --- ESCALAÇÃO RÁPIDA ---
+# --- ABA: ESCALAÇÃO RÁPIDA (COM EXIBIÇÃO DE PODER NOS BOTÕES) ---
 elif aba == "⚔️ Escalação Rápida":
     st.header("Centro de Escalação")
     c1, c2, c3 = st.columns([2, 1, 1])
@@ -98,13 +98,16 @@ elif aba == "⚔️ Escalação Rápida":
     t_alvo = st.radio("Escalar no:", ["Time A (18h)", "Time B (09h)"], horizontal=True)
     s_alvo = st.radio("Categoria:", ["Titular", "Reserva"], horizontal=True)
     
-    st.subheader("👤 Disponíveis")
+    st.subheader("👤 Disponíveis (Ordenados por Poder)")
+    # Ordena os disponíveis para facilitar a escolha dos mais fortes
     disp = df[df['Time'] == "Nenhum"].sort_values(by="Poder (M)", ascending=False)
     if not disp.empty:
         cols = st.columns(8)
         for i, (idx, row) in enumerate(disp.iterrows()):
             with cols[i % 8]:
-                if st.button(f"{ICONES.get(row['Tropa'], '')}\n{row['Jogador']}", key=f"add_{row['Jogador']}"):
+                # Botão agora mostra Nome + Poder
+                label_botao = f"{ICONES.get(row['Tropa'], '')}\n{row['Jogador']}\n({row['Poder (M)']}M)"
+                if st.button(label_botao, key=f"add_{row['Jogador']}"):
                     df.at[idx, 'Time'], df.at[idx, 'Status'] = t_alvo, s_alvo
                     df.to_csv(ARQUIVO_MEMBROS, index=False); st.rerun()
 
@@ -117,7 +120,9 @@ elif aba == "⚔️ Escalação Rápida":
             tp = "tit" if row['Status'] == "Titular" else "res"
             prefixo = "🟢" if tp == "tit" else "🟡"
             with cols_e[i % 8]:
-                if st.button(f"{prefixo} {row['Jogador']}", key=f"rem_{tp}_{row['Jogador']}"):
+                # Botão de remoção também mostra o poder para conferência rápida
+                label_rem = f"{prefixo} {row['Jogador']}\n({row['Poder (M)']}M)"
+                if st.button(label_rem, key=f"rem_{tp}_{row['Jogador']}"):
                     df.at[idx, 'Time'], df.at[idx, 'Status'] = "Nenhum", "Nenhum"
                     df.to_csv(ARQUIVO_MEMBROS, index=False); st.rerun()
 
