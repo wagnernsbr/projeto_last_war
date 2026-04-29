@@ -1,15 +1,17 @@
 import streamlit as st
 import pandas as pd
 import os
+import time
 from datetime import datetime, timedelta
 from streamlit_gsheets import GSheetsConnection
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="VS TRACKER", layout="wide", initial_sidebar_state="expanded")
 
-# --- LINK DA PLANILHA (O QUE FUNCIONOU) ---
+# --- LINK DA PLANILHA (Sincronizado com os 60.7M) ---
 URL_PLANILHA = "https://docs.google.com/spreadsheets/d/17K3uwOjJd3lOKH8el6b1sMwJpBBCEu2MrHdOJXXhMgI/edit?usp=sharing"
 
+# Arquivos locais para Backup e Persistência
 ARQUIVO_MEMBROS = "lista_membros.csv"
 ARQUIVO_HISTORICO = "historico_escalacoes.csv"
 ARQUIVO_MODELOS = "modelos_anuncio.csv"
@@ -38,55 +40,79 @@ st.markdown(f"""
     </style>
 """, unsafe_allow_html=True)
 
-# --- CARREGAMENTO DE DADOS ---
+# --- CARREGAMENTO DE DADOS (ONLINE COM BACKUP LOCAL) ---
 def carregar_dados():
     try:
-        # Tenta a conexão com o Google
         conn = st.connection("gsheets", type=GSheetsConnection)
         df_online = conn.read(spreadsheet=URL_PLANILHA, ttl=0)
         
-        # Ajuste das colunas
+        # Ajuste de colunas
         df_online = df_online.rename(columns={"Poder": "Poder (M)"})
         
-        for col in ["Time", "Status", "Tropa"]:
-            if col not in df_online.columns: df_online[col] = "Nenhum"
+        # Garante que as colunas essenciais existam
+        colunas_necessarias = ["Jogador", "Poder (M)", "Time", "Status", "Tropa"]
+        for col in colunas_necessarias:
+            if col not in df_online.columns:
+                df_online[col] = "Nenhum" if col != "Poder (M)" else 0.0
         
+        # Limpeza de dados nulos
         df_online["Time"] = df_online["Time"].fillna("Nenhum")
         df_online["Status"] = df_online["Status"].fillna("Nenhum")
         df_online["Jogador"] = df_online["Jogador"].fillna("Desconhecido")
         
-        st.toast("🌐 Sincronizado com Google Sheets!", icon="✅")
+        # Salva uma cópia local (Backup) para emergências
+        df_online.to_csv(ARQUIVO_MEMBROS, index=False)
+        st.toast("✅ Sincronizado com Google Sheets!", icon="📡")
         return df_online
     except Exception as e:
-        # Se falhar, mostra o erro e não tenta ler o CSV local
-        st.error(f"❌ Erro de Conexão: {e}")
+        st.warning("⚠️ Usando Backup Local (Conexão Online falhou).")
+        if os.path.exists(ARQUIVO_MEMBROS):
+            return pd.read_csv(ARQUIVO_MEMBROS)
         return pd.DataFrame(columns=["Jogador", "Poder (M)", "Time", "Status", "Tropa"])
 
-# --- MENU ---
+def carregar_modelos():
+    if os.path.exists(ARQUIVO_MODELOS):
+        try:
+            df_m = pd.read_csv(ARQUIVO_MODELOS)
+            if not df_m.empty: return df_m.iloc[0].to_dict()
+        except: pass
+    return {"deserto": "🌵 {lista}", "meio": "📅 {lista}", "final": "⚔️ {lista}"}
+
+# Inicialização do estado
+if 'dados' not in st.session_state: st.session_state.dados = carregar_dados()
+if 'modelos' not in st.session_state: st.session_state.modelos = carregar_modelos()
+
+df = st.session_state.dados
+ICONES = {"Tanque": "🚜", "Míssil": "🚀", "Aeronave": "✈️", "Nenhum": "❓"}
+
+# --- MENU LATERAL ---
 aba = st.sidebar.radio("MENU", ["📊 Dashboard", "⚔️ Escalação Rápida", "👤 Membros", "📜 Histórico", "📢 Anúncio"])
 
-if st.sidebar.button("🔄 ATUALIZAR DADOS"):
+if st.sidebar.button("🔄 ATUALIZAR PLANILHA AGORA"):
     st.session_state.dados = carregar_dados()
     st.rerun()
 
 # --- ABA: DASHBOARD ---
 if aba == "📊 Dashboard":
     st.title("🛡️ Painel de Comando")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("PODER TOTAL", f"{df['Poder (M)'].sum():.1f} M")
-    c2.metric("JOGADORES", len(df))
-    c3.metric("TANQUES 🚜", len(df[df['Tropa'] == 'Tanque']))
-    c4.metric("MÍSSIL/AÉREO 🚀", len(df[df['Tropa'].isin(['Míssil', 'Aeronave'])]))
-    st.divider()
-    ce, cd = st.columns(2)
-    with ce:
-        st.subheader("🏆 Top 10 Elite")
-        t10 = df.nlargest(10, 'Poder (M)').copy()
-        t10['Info'] = t10.apply(lambda r: f"{ICONES.get(r['Tropa'], '')} {r['Jogador']}", axis=1)
-        st.table(t10[['Info', 'Poder (M)']].reset_index(drop=True))
-    with cd:
-        st.subheader("📈 Distribuição")
-        if not df.empty: st.bar_chart(df['Tropa'].value_counts())
+    if not df.empty:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("PODER TOTAL", f"{df['Poder (M)'].sum():.1f} M")
+        c2.metric("JOGADORES", len(df))
+        c3.metric("TANQUES 🚜", len(df[df['Tropa'] == 'Tanque']))
+        c4.metric("MÍSSIL/AÉREO 🚀", len(df[df['Tropa'].isin(['Míssil', 'Aeronave'])]))
+        st.divider()
+        ce, cd = st.columns(2)
+        with ce:
+            st.subheader("🏆 Top 10 Elite")
+            t10 = df.nlargest(10, 'Poder (M)').copy()
+            t10['Info'] = t10.apply(lambda r: f"{ICONES.get(r['Tropa'], '')} {r['Jogador']}", axis=1)
+            st.table(t10[['Info', 'Poder (M)']].reset_index(drop=True))
+        with cd:
+            st.subheader("📈 Distribuição")
+            st.bar_chart(df['Tropa'].value_counts())
+    else:
+        st.error("Nenhum dado encontrado na planilha ou no backup.")
 
 # --- ABA: ESCALAÇÃO RÁPIDA ---
 elif aba == "⚔️ Escalação Rápida":
@@ -206,4 +232,4 @@ elif aba == "📢 Anúncio":
                 h_at = pd.read_csv(ARQUIVO_HISTORICO); h_at = h_at[h_at['Data'] != data_rel]
                 h_final = pd.concat([h_at, quem_vai], ignore_index=True)
             else: h_final = quem_vai
-            h_final.to_csv(ARQUIVO_HISTORICO, index=False); st.success("Histórico arquivado com sucesso!")
+            h_final.to_csv(ARQUIVO_HISTORICO, index=False); st.success("Histórico arquivado!")
