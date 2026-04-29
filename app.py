@@ -41,40 +41,26 @@ st.markdown(f"""
 # --- CARREGAMENTO DE DADOS ---
 def carregar_dados():
     try:
-        # Forçamos a conexão do Google Sheets
+        # Tenta a conexão com o Google
         conn = st.connection("gsheets", type=GSheetsConnection)
         df_online = conn.read(spreadsheet=URL_PLANILHA, ttl=0)
         
-        # Ajuste de colunas
+        # Ajuste das colunas
         df_online = df_online.rename(columns={"Poder": "Poder (M)"})
         
-        # Garantia de dados
         for col in ["Time", "Status", "Tropa"]:
             if col not in df_online.columns: df_online[col] = "Nenhum"
-            
+        
         df_online["Time"] = df_online["Time"].fillna("Nenhum")
         df_online["Status"] = df_online["Status"].fillna("Nenhum")
+        df_online["Jogador"] = df_online["Jogador"].fillna("Desconhecido")
         
-        st.toast("🌐 CONEXÃO ESTABELECIDA: Dados da Planilha carregados!", icon="🚀")
+        st.toast("🌐 Sincronizado com Google Sheets!", icon="✅")
         return df_online
     except Exception as e:
-        # Se falhar, ele vai mostrar o erro exato na tela em vez de carregar o arquivo antigo
-        st.error(f"⚠️ ERRO DE CONEXÃO COM O GOOGLE: {e}")
+        # Se falhar, mostra o erro e não tenta ler o CSV local
+        st.error(f"❌ Erro de Conexão: {e}")
         return pd.DataFrame(columns=["Jogador", "Poder (M)", "Time", "Status", "Tropa"])
-
-def carregar_modelos():
-    if os.path.exists(ARQUIVO_MODELOS):
-        try:
-            df_m = pd.read_csv(ARQUIVO_MODELOS)
-            if not df_m.empty: return df_m.iloc[0].to_dict()
-        except: pass
-    return {"deserto": "🌵 {lista}", "meio": "📅 {lista}", "final": "⚔️ {lista}"}
-
-if 'dados' not in st.session_state: st.session_state.dados = carregar_dados()
-st.session_state.modelos = carregar_modelos()
-
-df = st.session_state.dados
-ICONES = {"Tanque": "🚜", "Míssil": "🚀", "Aeronave": "✈️", "Nenhum": "❓"}
 
 # --- MENU ---
 aba = st.sidebar.radio("MENU", ["📊 Dashboard", "⚔️ Escalação Rápida", "👤 Membros", "📜 Histórico", "📢 Anúncio"])
