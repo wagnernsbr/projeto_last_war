@@ -41,24 +41,25 @@ st.markdown(f"""
 # --- CARREGAMENTO DE DADOS ---
 def carregar_dados():
     try:
+        # Forçamos a conexão do Google Sheets
         conn = st.connection("gsheets", type=GSheetsConnection)
-        # ttl=0 garante que ele busque o dado novo sem cache
         df_online = conn.read(spreadsheet=URL_PLANILHA, ttl=0)
         
+        # Ajuste de colunas
         df_online = df_online.rename(columns={"Poder": "Poder (M)"})
         
+        # Garantia de dados
         for col in ["Time", "Status", "Tropa"]:
             if col not in df_online.columns: df_online[col] = "Nenhum"
-        
+            
         df_online["Time"] = df_online["Time"].fillna("Nenhum")
         df_online["Status"] = df_online["Status"].fillna("Nenhum")
-        df_online["Jogador"] = df_online["Jogador"].fillna("Desconhecido")
         
-        st.toast("📡 Planilha Sincronizada!", icon="✅")
+        st.toast("🌐 CONEXÃO ESTABELECIDA: Dados da Planilha carregados!", icon="🚀")
         return df_online
     except Exception as e:
-        st.warning("Usando banco de dados local.")
-        if os.path.exists(ARQUIVO_MEMBROS): return pd.read_csv(ARQUIVO_MEMBROS)
+        # Se falhar, ele vai mostrar o erro exato na tela em vez de carregar o arquivo antigo
+        st.error(f"⚠️ ERRO DE CONEXÃO COM O GOOGLE: {e}")
         return pd.DataFrame(columns=["Jogador", "Poder (M)", "Time", "Status", "Tropa"])
 
 def carregar_modelos():
